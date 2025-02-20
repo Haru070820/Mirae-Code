@@ -1,0 +1,110 @@
+import RPi.GPIO as GPIO
+import time
+import smbus
+import pwmio
+from adafruit_motor import servo
+
+# 하드웨어 설정
+keypad_keys = [['1', '2', '3', '4'], ['5', '6', '7', '8']]
+SCL_PIN = 5    # 키패드 SCL
+SDO_PIN = 6    # 키패드 SDO
+LCD_SDA = 23   # LCD SDA
+LCD_SCL = 24   # LCD SCL
+SERVO_PIN = 17  # 서보모터 제어 핀
+LED_PIN = 18    # LED 핀
+
+# I2C 설정 (rpi_i2c)
+bus = smbus.SMBus(1)
+LCD_ADDRESS = 0x3F  # I2C 주소 (LCD 주소는 다를 수 있음)
+LCD_WIDTH = 16       # LCD 최대 글자 수 (16x2 기준)
+
+# 서보 모터 설정
+servo_pwm = pwmio.PWMOut(SERVO_PIN, duty_cycle=2 ** 15, frequency=50)
+servo_motor = servo.Servo(servo_pwm)
+
+# LED 설정
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(LED_PIN, GPIO.OUT)
+GPIO.output(LED_PIN, GPIO.LOW)
+
+# 키패드 설정
+GPIO.setup(SCL_PIN, GPIO.OUT)
+GPIO.setup(SDO_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+# 비밀번호 설정
+password = '1234'
+input_password = ""
+
+def lcd_write(byte, mode=0):
+    """I2C를 통해 LCD에 데이터 쓰기"""
+    bus.write_byte_data(LCD_ADDRESS, mode, byte)
+
+def lcd_init():
+    """LCD 초기화"""
+    lcd_write(0x33, 0)  # 4비트 모드 설정
+    lcd_write(0x32, 0)  # 4비트 모드 설정
+    lcd_write(0x28, 0)  # 2줄 5x8 글자 설정
+    lcd_write(0x0C, 0)  # LCD 켜기, 커서 끄기
+    lcd_write(0x06, 0)  # 자동 증가 모드
+    lcd_write(0x01, 0)  # 화면 지우기
+
+def lcd_string(message, line=1):
+    """LCD에 문자열 표시"""
+    if line == 1:
+        lcd_write(0x80, 0)  # 1행 시작
+    elif line == 2:
+        lcd_write(0xC0, 0)  # 2행 시작
+    for char in message:
+        lcd_write(ord(char), 1)  # 문자 출력
+
+def read_keypad():
+    for row in range(2):  # 키패드의 2행
+        GPIO.output(SCL_PIN, GPIO.LOW)
+        time.sleep(0.01)
+        
+        if GPIO.input(SDO_PIN) == GPIO.LOW:
+            return keypad_keys[row][0]
+        GPIO.output(SCL_PIN, GPIO.HIGH)
+    return None
+
+def check_password():
+    global input_password
+    if input_password == password:
+        lcd_write(0x01, 0)  # 화면 지우기
+        lcd_string("Success", 1)
+        GPIO.output(LED_PIN, GPIO.HIGH)  # LED 켜기
+        servo_motor.angle = 90  # 서보모터로 문 열기
+        time.sleep(3)  # 3초간 열림 상태
+        servo_motor.angle = 0  # 문 닫기
+    else:
+        lcd_write(0x01, 0)  # 화면 지우기
+        lcd_string("Fail", 1)
+        GPIO.output(LED_PIN, GPIO.LOW)  # LED 끄기
+
+def main():
+    global input_password
+    lcd_init()
+    lcd_string("Enter Password:", 1)
+    
+    while True:
+        key = read_keypad()  # 키패드에서 입력 받기
+        if key:
+            if key == '#':  # 비밀번호 확인
+                check_password()
+                input_password = ""  # 비밀번호 초기화
+                lcd_write(0x01, 0)  # 화면 지우기
+                lcd_string("Enter Password:", 1)
+            elif key == '*':  # 비밀번호 초기화
+                input_password = ""
+                lcd_write(0x01, 0)  # 화면 지우기
+                lcd_string("Enter Password:", 1)
+            else:
+                input_password += key
+                lcd_write(0x01, 0)  # 화면 지우기
+                lcd_string("Input: " + " ".join(input_password), 1)  # 입력된 비밀번호 출력
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        GPIO.cleanup()
