@@ -7,15 +7,15 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 
 # 핀 설정
-SERVO_PIN = 16        # 서보모터 핀
-TTP229_SCL = 5        # 키패드 SCL 핀
-TTP229_SDO = 6        # 키패드 SDO 핀
-RGB_RED = 17          # 빨간색 LED 핀
-RGB_BLUE = 27         # 파란색 LED 핀
+SERVO_PIN = 16
+TTP229_SCL = 5
+TTP229_SDO = 6
+RGB_RED = 17
+RGB_BLUE = 27
 
 # 핀 초기화
 GPIO.setup(TTP229_SCL, GPIO.OUT)
-GPIO.setup(TTP229_SDO, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(TTP229_SDO, GPIO.IN)
 GPIO.setup(RGB_RED, GPIO.OUT)
 GPIO.setup(RGB_BLUE, GPIO.OUT)
 GPIO.setup(SERVO_PIN, GPIO.OUT)
@@ -24,67 +24,55 @@ GPIO.setup(SERVO_PIN, GPIO.OUT)
 lcd = RPi_I2C_driver.lcd()
 
 # 서보모터 PWM 설정
-servo = GPIO.PWM(SERVO_PIN, 50)  # 50Hz로 PWM 설정
-servo.start(0)  # 서보모터 초기화 (0도 위치)
+servo = GPIO.PWM(SERVO_PIN, 50)
+servo.start(0)
 
 # 비밀번호 설정
 CORRECT_PASSWORD = "1234"
 input_password = ""
 
 def read_keypad():
-    """키패드에서 값을 읽는 함수"""
     GPIO.output(TTP229_SCL, GPIO.HIGH)
-    time.sleep(0.001)  # 키패드에서 신호 읽기 잠깐 대기
+    time.sleep(0.001)
     key_value = GPIO.input(TTP229_SDO)
     GPIO.output(TTP229_SCL, GPIO.LOW)
     return key_value
 
 def set_servo_angle(angle):
-    """서보모터로 문을 여는 함수"""
-    duty = angle / 18 + 2  # 서보 각도에 맞는 duty 비율 계산
+    duty = angle / 18 + 2
     servo.ChangeDutyCycle(duty)
-    time.sleep(1)  # 서보모터가 완전히 이동할 때까지 대기
-
-def lcd_display(message, line=1):
-    """LCD에 메시지 출력하는 함수"""
-    lcd.lcd_clear()  # LCD 화면 초기화
-    if line == 1:
-        lcd.lcd_display_string(message, 1)  # 1행에 메시지 출력
-    else:
-        lcd.lcd_display_string(message, 2)  # 2행에 메시지 출력
+    time.sleep(1)
 
 try:
     while True:
-        key = read_keypad()  # 키패드에서 입력 받기
-        
+        key = read_keypad()
         if key:
-            # 키 입력이 있으면 비밀번호에 추가
             input_password += str(key)
-            lcd_display("Password:", 1)  # LCD 첫 번째 줄에 'Password:'
-            lcd_display("*" * len(input_password), 2)  # LCD 두 번째 줄에 입력된 '*' 표시
+            lcd.lcd_clear()
+            lcd.lcd_display_string("Password:", 1)
+            lcd.lcd_display_string("*" * len(input_password), 2)
+            print(input_password )
             
-            # 비밀번호 길이가 4자리면 확인
             if len(input_password) == 4:
                 if input_password == CORRECT_PASSWORD:
-                    # 비밀번호 맞으면 'Access Granted!' 표시
-                    lcd_display("Access Granted!", 1)
-                    GPIO.output(RGB_BLUE, GPIO.HIGH)  # 파란색 LED 켜기
-                    GPIO.output(RGB_RED, GPIO.LOW)   # 빨간색 LED 끄기
-                    set_servo_angle(90)  # 서보모터로 문 열기
+                    lcd.lcd_clear()
+                    lcd.lcd_display_string("Access Granted!", 1)
+                    GPIO.output(RGB_BLUE, GPIO.HIGH)
+                    GPIO.output(RGB_RED, GPIO.LOW)
+                    set_servo_angle(90)  # 문 열기
                 else:
-                    # 비밀번호 틀리면 'Access Denied!' 표시
-                    lcd_display("Access Denied!", 1)
-                    GPIO.output(RGB_RED, GPIO.HIGH)  # 빨간색 LED 켜기
-                    GPIO.output(RGB_BLUE, GPIO.LOW)  # 파란색 LED 끄기
-                
-                # 2초간 결과 보여주고, 비밀번호 입력 초기화
+                    lcd.lcd_clear()
+                    lcd.lcd_display_string("Access Denied!", 1)
+                    GPIO.output(RGB_RED, GPIO.HIGH)
+                    GPIO.output(RGB_BLUE, GPIO.LOW)
                 time.sleep(2)
                 input_password = ""
-                lcd_display("Enter Password:", 1)  # LCD에 비밀번호 입력 요구 메시지
-                set_servo_angle(0)  # 서보모터로 문 닫기
-
-        time.sleep(0.1)  # 키패드 입력 대기 시간
+                lcd.lcd_clear()
+                set_servo_angle(0)  # 문 닫기
+                
+        time.sleep(0.1)
 
 except KeyboardInterrupt:
-    servo.stop()  # 서보모터 PWM 종료
-    GPIO.cleanup()  # GPIO 설정 정리
+    servo.stop()
+    GPIO.cleanup()
+
