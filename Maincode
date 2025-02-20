@@ -1,0 +1,118 @@
+    import RPi.GPIO as GPIO
+    import time
+    from RPLCD.i2c import CharLCD
+
+    # GPIO 핀 설정
+    SCL_PIN = 27  # TTP229 SCL
+    SDO_PIN = 22  # TTP229 SDO
+    SERVO_PIN = 17
+    RED_PIN = 23
+    GREEN_PIN = 24
+    BLUE_PIN = 25
+
+    # 상수 설정
+    PASSWORD = "3566"
+    SERVO_MIN_DUTY = 3
+    SERVO_MAX_DUTY = 12
+
+    # GPIO 초기화
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+    GPIO.setup(SCL_PIN, GPIO.OUT)
+    GPIO.setup(SDO_PIN, GPIO.IN)
+    GPIO.setup(SERVO_PIN, GPIO.OUT)
+    GPIO.setup(RED_PIN, GPIO.OUT)
+    GPIO.setup(GREEN_PIN, GPIO.OUT)
+    GPIO.setup(BLUE_PIN, GPIO.OUT)
+
+    # LCD 초기화
+    lcd = CharLCD('PCF8574', 0x27)
+
+    # 서보모터 PWM 설정
+    servo = GPIO.PWM(SERVO_PIN, 50)
+    servo.start(0)
+
+    # 키패드 상태 변수
+    last_key_press_time = 0
+    last_key = None
+    DEBOUNCE_TIME = 0.5  # 디바운스 시간 (300ms)
+
+    def read_keypad():
+        global last_key_press_time, last_key
+        current_time = time.time()
+        
+        # 디바운스 체크
+        if (current_time - last_key_press_time) < DEBOUNCE_TIME:
+            return None
+            
+        pressed_key = None
+        GPIO.output(SCL_PIN, GPIO.HIGH)
+        time.sleep(0.001)
+        
+        for i in range(8):
+            GPIO.output(SCL_PIN, GPIO.LOW)
+            time.sleep(0.001)
+            if not GPIO.input(SDO_PIN):
+                key = str((i + 1) if i < 9 else 0)
+                if key != last_key:  # 이전 키와 다른 경우에만 입력 처리
+                    pressed_key = key
+                    last_key = key
+                    last_key_press_time = current_time
+            GPIO.output(SCL_PIN, GPIO.HIGH)
+            time.sleep(0.001)
+        
+        # 키가 눌리지 않은 경우 last_key 초기화
+        if GPIO.input(SDO_PIN):
+            last_key = None
+            
+        return pressed_key
+
+    def set_servo_position(angle):
+        duty = SERVO_MIN_DUTY + (angle * (SERVO_MAX_DUTY - SERVO_MIN_DUTY) / 180.0)
+        servo.ChangeDutyCycle(duty)
+        time.sleep(0.3)
+        servo.ChangeDutyCycle(0)  # 서보 떨림 방지
+
+    def set_led_color(r, g, b):
+        GPIO.output(RED_PIN, r)
+        GPIO.output(GREEN_PIN, g)
+        GPIO.output(BLUE_PIN, b)
+
+    try:
+        input_password = ""
+        lcd.clear()
+        lcd.write_string("Enter Password:")
+        
+        while True:
+            key = read_keypad()
+            if key:
+                if len(input_password) < 4:  # 4자리까지만 입력 받음
+                    input_password += key
+                    lcd.cursor_pos = (1, 0)
+                    lcd.write_string(input_password + "*" * (4 - len(input_password)))
+                    
+                if len(input_password) == 4:
+                    time.sleep(0.5)  # 마지막 숫자 표시를 위한 대기
+                    if input_password == PASSWORD:
+                        lcd.clear()
+                        lcd.write_string("Access Granted!")
+                        set_led_color(0, 0, 1)  # 파란색
+                        set_servo_position(90)   # 문 열기
+                else:
+                    lcd.clear()
+                    lcd.write_string("Access Denied!")
+                    set_led_color(1, 0, 0)  # 빨간색
+                
+                time.sleep(2)
+                input_password = ""
+                lcd.clear()
+                lcd.write_string("Enter Password:")
+                lcd.cursor_pos = (1, 0)
+                lcd.write_string("****")  # 빈 자리를 *로 표시
+                set_led_color(0, 0, 0)
+                set_servo_position(0)
+
+except KeyboardInterrupt:
+    lcd.clear()
+    servo.stop()
+    GPIO.cleanup()
