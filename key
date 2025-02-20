@@ -1,0 +1,62 @@
+import RPi.GPIO as GPIO
+import time
+
+# GPIO 핀 설정 (1번 키패드)
+SCL1_PIN = 27  # 1번 키패드 SCL
+SDO1_PIN = 22  # 1번 키패드 SDO
+
+# GPIO 핀 설정 (2번 키패드)
+SCL2_PIN = 13  # 2번 키패드 SCL
+SDO2_PIN = 19  # 2번 키패드 SDO
+
+# 키 매핑
+keypad1_keys = [['1', '2', '3', '4'],
+                ['5', '6', '7', '8']]
+
+keypad2_keys = ['9', '0', '*', '#']  # 2번 키패드는 4x1 배열
+
+# GPIO 설정
+GPIO.setmode(GPIO.BCM)
+
+GPIO.setup(SCL1_PIN, GPIO.OUT)
+GPIO.setup(SDO1_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+GPIO.setup(SCL2_PIN, GPIO.OUT)
+GPIO.setup(SDO2_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+def read_keypad1():
+    for row in range(2):  # 1번 키패드 (2행)
+        GPIO.output(SCL1_PIN, GPIO.LOW)
+        time.sleep(0.01)
+        
+        if GPIO.input(SDO1_PIN) == GPIO.LOW:
+            print(f"Pressed: {keypad1_keys[row][0]}")
+            time.sleep(0.2)
+
+        GPIO.output(SCL1_PIN, GPIO.HIGH)
+
+def read_keypad2():
+    for i in range(4):  # 2번 키패드 (4개의 버튼)
+        GPIO.output(SCL2_PIN, GPIO.LOW)
+        time.sleep(0.01)
+        
+        if GPIO.input(SDO2_PIN) == GPIO.LOW:
+            key = keypad2_keys[i]
+            if key == "*":
+                print("지워짐")
+            elif key == "#":
+                print("입력됨")
+            else:
+                print(f"Pressed: {key}")
+            time.sleep(0.2)
+
+        GPIO.output(SCL2_PIN, GPIO.HIGH)
+
+try:
+    while True:
+        read_keypad1()
+        read_keypad2()
+        time.sleep(0.1)
+
+except KeyboardInterrupt:
+    GPIO.cleanup()
