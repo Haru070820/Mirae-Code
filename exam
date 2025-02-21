@@ -1,0 +1,43 @@
+def main():  
+    correct_password = "8123" #비밀번호
+    entered_password = ""
+    last_key = "0"
+    
+    try:
+        lcd.lcd_clear()
+        # LCD화면 출력
+        lcd.lcd_display_string("Enter Password:", 1) 
+        lcd.lcd_display_string("Password: ", 2)
+        
+        while True:
+            key = read_keypad()
+            if key != "0" and key != last_key:
+                last_key = key
+                entered_password += key
+                lcd.lcd_display_string("Enter Password:", 1)
+                lcd.lcd_display_string("Password: " + "*" * len(entered_password), 2)
+								#비밀번호가 입력되면 "*"로 표시
+                time.sleep(0.2)
+                
+                if len(entered_password) == 4:
+                    if entered_password == correct_password:
+                        lcd.lcd_clear()
+                        lcd.lcd_display_string("Access Granted!", 1)
+                        set_rgb(0, 0, 1)
+                        open_door()
+                    else:
+                        lcd.lcd_clear()
+                        lcd.lcd_display_string("Access Denied!", 1)
+                        set_rgb(1, 0, 0)
+                    
+                    # 시간이 지난 후 문이 잠김
+                    time.sleep(2)
+                    entered_password = ""
+                    last_key = "0"
+                    lcd.lcd_clear()
+                    # LCD화면 처음화면으로 초기화
+                    lcd.lcd_display_string("Enter Password:", 1)
+                    lcd.lcd_display_string("Password: ", 2)
+                    set_rgb(0, 0, 0)
+            
+            time.sleep(0.05)
